@@ -2,8 +2,8 @@ from coala import Lab
 import pytest
 
 
-def test_all_world(tutorial_lab: Lab):
-    # world load 가 문제없는지 확인함
+def test_all_lab(tutorial_lab: Lab):
+    # lab load 가 문제없는지 확인함
     assert isinstance(tutorial_lab, Lab)
     assert tutorial_lab.lab_name == "tutorial_lab"
 

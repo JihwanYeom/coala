@@ -195,7 +195,7 @@ class CLI:
     """CLI for managing coala labs."""
 
     def create_lab(self, lab_name: str):
-        """Creates a new world lab with basic elements and test structure.
+        """Creates a new lab with basic elements and test structure.
 
         Args:
             lab_name: The name of the lab directory to create.
@@ -241,7 +241,9 @@ async def test_fuse_fire_and_water({lab_name}: Lab):
         print(f"'{lab_name}' 실험실을 {lab_dir}에 생성했습니다.")
         print(f"'{lab_name}'을 위한 테스트 구조를 {test_dir}에 생성했습니다.")
         print("\n다음 단계:")
-        print(f'1. 새 실험실 검증을 위해 테스트를 실행하세요: `uv run pytest -k "{lab_name}" -v`')
+        print(
+            f'1. 새 실험실 검증을 위해 테스트를 실행하세요: `uv run pytest -k "{lab_name}" -v`'
+        )
         print(
             f"2. `src/coala/{lab_name}/`에 새로운 원소 레시피를 추가하세요 (예: ingredients가 [fire, water]인 steam.yaml)"
         )
