@@ -10,6 +10,8 @@ log = getLogger(__name__)
 _ALREADY_CHECKED_RECIPES: set[str] = set()
 _FUSION_CACHE: dict[tuple[str, str], str] = {}
 
+import fire
+
 
 class Lab:
     """A laboratory for fusing elements and verifying recipes using InfiniteCraft.
@@ -187,3 +189,66 @@ class Lab:
 
         _ALREADY_CHECKED_RECIPES.add(target)
         visited.remove(target)
+
+
+class CLI:
+    """CLI for managing coala labs."""
+
+    def create_lab(self, lab_name: str):
+        """Creates a new world lab with basic elements and test structure.
+
+        Args:
+            lab_name: The name of the lab directory to create.
+        """
+        if not lab_name.endswith("_lab"):
+            lab_name = lab_name + "_lab"
+        # Create src directory and elements
+        lab_dir = Path(__file__).parent / lab_name
+        lab_dir.mkdir(exist_ok=True)
+        elements = ["earth", "fire", "water", "wind"]
+        for elem in elements:
+            with open(lab_dir / f"{elem}.yaml", "w", encoding="utf-8") as f:
+                f.write("ingredients: []\n")
+
+        with open(lab_dir / f"__init__.py", "w") as f:
+            ...
+
+        # Create tests directory and test file
+        # Assuming project root is two levels up from this file (src/coala/__init__.py)
+        project_root = Path(__file__).parent.parent.parent
+        test_dir = project_root / "tests" / lab_name
+        test_dir.mkdir(parents=True, exist_ok=True)
+        (test_dir / "__init__.py").touch()
+
+        test_content = f"""from coala import Lab
+import pytest
+
+
+def test_all_lab({lab_name}: Lab):
+    # Check if lab load is successful
+    assert isinstance({lab_name}, Lab)
+    assert {lab_name}.lab_name == "{lab_name}"
+
+@pytest.mark.asyncio
+async def test_fuse_fire_and_water({lab_name}: Lab):
+    result = await {lab_name}.fuse("fire", "water")
+    assert result == "steam"
+
+"""
+        with open(test_dir / "test_each_elems.py", "w", encoding="utf-8") as f:
+            f.write(test_content)
+
+        print(f"'{lab_name}' 실험실을 {lab_dir}에 생성했습니다.")
+        print(f"'{lab_name}'을 위한 테스트 구조를 {test_dir}에 생성했습니다.")
+        print("\n다음 단계:")
+        print(f'1. 새 실험실 검증을 위해 테스트를 실행하세요: `uv run pytest -k "{lab_name}" -v`')
+        print(
+            f"2. `src/coala/{lab_name}/`에 새로운 원소 레시피를 추가하세요 (예: ingredients가 [fire, water]인 steam.yaml)"
+        )
+        print(
+            f"3. `tests/{lab_name}/test_each_elems.py`에 테스트를 더 추가하여 발견한 내용을 검증하세요"
+        )
+
+
+def cli():
+    fire.Fire(CLI)
