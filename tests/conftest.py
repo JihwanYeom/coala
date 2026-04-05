@@ -1,22 +1,34 @@
 import asyncio
 from logging import getLogger
 from pathlib import Path
+import pytest
 import coala
 
 log = getLogger(__name__)
 
+# List to track created labs for proper teardown
+_CREATED_LABS = []
+
 
 async def _get_lab_async(lab_name: str, storage_path: str):
-    """Asynchronously initializes a Lab and verifies its recipes."""
+    """Asynchronously initializes a Lab."""
     lab = coala.Lab(lab_name, storage_path)
     await lab.start()
-    await lab.assert_is_fusable()
+    _CREATED_LABS.append(lab)
     return lab
 
 
 def get_lab(lab_name: str, storage_path: str):
     """Synchronous wrapper for _get_lab_async."""
     return asyncio.run(_get_lab_async(lab_name, storage_path))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_labs():
+    """Session-scoped fixture to ensure all labs are closed after tests."""
+    yield
+    for lab in _CREATED_LABS:
+        asyncio.run(lab.close())
 
 
 def pytest_generate_tests(metafunc):

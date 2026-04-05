@@ -1,16 +1,15 @@
 import asyncio
 from logging import getLogger
 from pathlib import Path
+
+import fire
 import yaml
 from infinitecraft import InfiniteCraft
 
 log = getLogger(__name__)
 
-# Global cache to minimize API calls and redundant checks across different labs
-_ALREADY_CHECKED_RECIPES: set[str] = set()
+# Global fusion cache to share discovery results across different labs and sessions
 _FUSION_CACHE: dict[tuple[str, str], str] = {}
-
-import fire
 
 
 class Lab:
@@ -41,6 +40,8 @@ class Lab:
         self.recipes: dict[str, list[str]] = {}
         # Locate the lab directory relative to the package location
         self.lab_path = Path(__file__).parent / lab_name
+        # Instance-level cache for validation to prevent cross-lab contamination
+        self._checked_recipes: set[str] = set()
 
     async def start(self):
         """Starts the InfiniteCraft session and loads recipes from YAML files.
@@ -58,23 +59,33 @@ class Lab:
         await self.game.start()
 
         for file in self.lab_path.glob("*.yaml"):
-            with open(file, "r", encoding="utf-8") as f:
-                info = yaml.load(f, Loader=yaml.FullLoader)
+            try:
+                with open(file, "r", encoding="utf-8") as f:
+                    info = yaml.load(f, Loader=yaml.FullLoader)
 
-            target = file.stem
-            # Support both 'ingredients' and 'recipe' keys
-            key = "ingredients" if "ingredients" in info else "recipe"
+                if info is None:
+                    continue
 
-            if key not in info:
+                target = file.stem
+                # Support both 'ingredients' and 'recipe' keys
+                key = "ingredients" if "ingredients" in info else "recipe"
+
+                if key not in info:
+                    raise ValueError(f"Missing 'ingredients' or 'recipe' key.")
+
+                recipe = info[key]
+                if not isinstance(recipe, list):
+                    raise ValueError(f"Recipe item '{key}' in '{file}' must be a list.")
+
+                self.recipes[target] = recipe
+            except Exception as e:
                 raise ValueError(
-                    f"YAML file '{file}' does not contain 'recipe' or 'ingredients'."
-                )
+                    f"Failed to load recipe from '{file.name}': {e}"
+                ) from e
 
-            recipe = info[key]
-            if not isinstance(recipe, list):
-                raise ValueError(f"Recipe item '{key}' in '{file}' must be a list.")
-
-            self.recipes[target] = recipe
+    async def close(self):
+        """Closes the InfiniteCraft session and releases resources."""
+        await self.game.stop()
 
     async def fuse(self, first_elem: str, second_elem: str) -> str:
         """Fuses two elements and returns the resulting element name.
@@ -135,6 +146,7 @@ class Lab:
         Raises:
             AssertionError: If verification fails or a cycle is detected.
         """
+        self._checked_recipes.clear()
         if target is None:
             for elem in list(self.recipes.keys()):
                 await self._assert_fusable_recursive(elem, set())
@@ -148,7 +160,7 @@ class Lab:
             target: The element to verify.
             visited: Tracks elements in current recursion stack to detect cycles.
         """
-        if target in _ALREADY_CHECKED_RECIPES:
+        if target in self._checked_recipes:
             return
 
         if target in visited:
@@ -187,7 +199,7 @@ class Lab:
                     f"Recipe mismatch: {ingredients} -> '{result_name}', expected '{target}'."
                 )
 
-        _ALREADY_CHECKED_RECIPES.add(target)
+        self._checked_recipes.add(target)
         visited.remove(target)
 
 
@@ -214,7 +226,6 @@ class CLI:
             ...
 
         # Create tests directory and test file
-        # Assuming project root is two levels up from this file (src/coala/__init__.py)
         project_root = Path(__file__).parent.parent.parent
         test_dir = project_root / "tests" / lab_name
         test_dir.mkdir(parents=True, exist_ok=True)
@@ -229,20 +240,26 @@ def test_all_lab({lab_name}: Lab):
     assert isinstance({lab_name}, Lab)
     assert {lab_name}.lab_name == "{lab_name}"
 
+
+@pytest.mark.asyncio
+async def test_lab_integrity({lab_name}: Lab):
+    \"\"\"Verifies that all recipes in the lab are structurally sound and fusable.\"\"\"
+    await {lab_name}.assert_is_fusable()
+
+
 @pytest.mark.asyncio
 async def test_fuse_fire_and_water({lab_name}: Lab):
     result = await {lab_name}.fuse("fire", "water")
     assert result == "steam"
-
 """
         with open(test_dir / "test_each_elems.py", "w", encoding="utf-8") as f:
             f.write(test_content)
 
-        print(f"'{lab_name}' 실험실을 {lab_dir}에 생성했습니다.")
+        print(f"'{lab_name}' 연구소를 {lab_dir}에 생성했습니다.")
         print(f"'{lab_name}'을 위한 테스트 구조를 {test_dir}에 생성했습니다.")
         print("\n다음 단계:")
         print(
-            f'1. 새 실험실 검증을 위해 테스트를 실행하세요: `uv run pytest -k "{lab_name}" -v`'
+            f'1. 새 연구실 검증을 위해 테스트를 실행하세요: `uv run pytest -k "{lab_name}" -v`'
         )
         print(
             f"2. `src/coala/{lab_name}/`에 새로운 원소 레시피를 추가하세요 (예: ingredients가 [fire, water]인 steam.yaml)"

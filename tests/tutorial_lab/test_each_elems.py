@@ -9,6 +9,12 @@ def test_all_lab(tutorial_lab: Lab):
 
 
 @pytest.mark.asyncio
+async def test_lab_integrity(tutorial_lab: Lab):
+    """Verifies that all recipes in the lab are structurally sound and fusable."""
+    await tutorial_lab.assert_is_fusable()
+
+
+@pytest.mark.asyncio
 async def test_fuse_fire_and_water(tutorial_lab: Lab):
     result = await tutorial_lab.fuse("fire", "water")
     assert result == "steam"
